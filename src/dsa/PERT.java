@@ -1,11 +1,5 @@
-/* Starter code for PERT algorithm (Project 4)
- * @author
- */
-
-// change dsa to your netid
 package dsa;
 
-import dsa.Graph;
 import dsa.Graph.Vertex;
 import dsa.Graph.Edge;
 import dsa.Graph.GraphAlgorithm;
@@ -17,194 +11,269 @@ import java.util.Scanner;
 import java.util.Stack;
 
 public class PERT extends GraphAlgorithm<PERT.PERTVertex> {
-    LinkedList<Vertex> finishList;
-    private static int criticalPathLength;
-    private static int countofCriticalTasks;
+
+    // Class variables
+    LinkedList<Vertex> finishList; // Contains the topological ordering of the vertices
+    Stack<Vertex> tempVertexStack = new Stack<>(); // temporary stack used while browsing the graph and determining topological ordering
 
     public static class PERTVertex implements Factory {
-        // Add fields to represent attributes of vertices here
-        public int name; // name of the vertex
-        public boolean seen; // flag to check if the vertex has already been visited
-        public boolean active; //active flag
-        public int duration; // duration required for task
-        public int EC; // earliest completion time when task is completed
-        public int LC; // latest completion time when task is completed
-        public int LS; // latest start
+
+        // Class variables
+        public int ec; // earliest completion time
+        public int lc; // latest completion time
+        public boolean seen; // flag that would be used to check if the vertex has already been visited
+        public boolean active; // flag that would indicate if that's the active flag or not
+        public int duration; // duration of for task
         public int slack; // slack
 
+        /**
+         * PERTVertex constructor
+         *
+         * @param u Graph vertex
+         */
         public PERTVertex(Vertex u) {
-            seen = false;
-            active=false;
-            EC=0;
-            LS=0;
-            LC=0;
-            slack=0;
+            ec = 0;
+            lc = 0;
+            slack = 0;
             duration = 0;
+            seen = false;
+            active = false;
         }
+
+        /**
+         * Creates a PERTVertex given a Graph vertex
+         *
+         * @param u
+         * @return PERTVertex
+         */
         public PERTVertex make(Vertex u) { return new PERTVertex(u); }
     }
 
-    // Constructor for PERT is private. Create PERT instances with static method pert().
+    /**
+     * Create PERT instances with static method pert()
+     *
+     * @param g graph
+     */
     private PERT(Graph g) {
         super(g, new PERTVertex(null));
     }
 
+    /**
+     * Sets the duration of a given task
+     *
+     * @param u vertex
+     * @param d duration of the task
+     */
     public void setDuration(Vertex u, int d) {
         get(u).duration = d;
     }
 
-    // Implement the PERT algorithm. Returns false if the graph g is not a DAG.
+    /**
+     * Implementation of the PERT algorithm
+     *
+     * @return boolean : false if the graph g is not a DAG
+     */
     public boolean pert() {
-        //calculate topological ordering
-        finishList = topologicalOrder();
+        // Calculates topological ordering of the graph using DFS Algorithm
+        try {
+            finishList = topologicalOrder();
+        }
+        catch (Exception e){
+            return false;
+        }
 
-        //create a reverse stack of Vertex for calculating the LC
-        Stack<Vertex> revStack = new Stack<Vertex>();
+
+        // Calculating EC for each vertex of the graph
+        for(Vertex u : finishList){
+            get(u).ec = ec(u);
+        }
+
+        // Creating a reverse topological ordering
+        Stack<Vertex> reverseTopologicalOrder = new Stack<>();
         for(Vertex v: finishList){
-            revStack.push(v);
+            reverseTopologicalOrder.push(v);
         }
 
-        //calculate EC
-        for(Graph.Vertex u : finishList){
-            System.out.print(u.name + " ");
-            get(u).EC = ec(u);
+        // Calculating LC
+        while(!reverseTopologicalOrder.isEmpty()){
+            Vertex u = reverseTopologicalOrder.pop();
+            get(u).lc = lc(u);
         }
-        System.out.println();
 
-        //calculate LC
-        criticalPathLength = get(revStack.peek()).EC;
-        while(!revStack.isEmpty()){
-            Graph.Vertex u = revStack.pop();
-            System.out.print(u.name + " ");
-            get(u).LC = lc(u);
-        }
-        System.out.println();
-
-        //calculate slack
-        for(Graph.Vertex u : g){
+        // Calculating slack
+        for(Vertex u : g){
             get(u).slack = slack(u);
         }
 
-        show();
         return true;
     }
 
-    //Stack of Vertex in topological order
-    Stack<Vertex> stackVertex = new Stack<Vertex>();
 
-    // Find a topological order of g using DFS
-    LinkedList<Vertex> topologicalOrder() {
-        //set all active and seen flag of all vertices to false
+    /**
+     * Determines the topological order of the graph using DFS
+     *
+     * @return LinkedList<Vertex>
+     */
+    LinkedList<Vertex> topologicalOrder() throws Exception {
+        // Unmark all graph vertices flags
         for (Vertex u : g) {
             get(u).seen = false;
             get(u).active = false;
         }
-        //call DFSVisit on each unseen Vertex
+
+        // Calling dfsVisit on each unseen Vertex
         for (Vertex u : g) {
             if(!get(u).seen){
                 dfsVisit(u);
             }
         }
-        LinkedList<Graph.Vertex> topologicalList = new LinkedList<Graph.Vertex>();
-        while(!stackVertex.isEmpty()){
-            topologicalList.add(stackVertex.pop());
+
+        // Initializing a list for the result
+        LinkedList<Vertex> topologicalList = new LinkedList<>();
+        while(!tempVertexStack.isEmpty()){
+            topologicalList.add(tempVertexStack.pop());
         }
+
         return topologicalList;
     }
 
-    void dfsVisit(Vertex u) {
-        get(u).seen=true;// set u as seen
-        get(u).active=true;// set u as active
-        /*for each vertex adjacent to u check if it is seen*/
+    /**
+     * @param u active vertex
+     */
+    void dfsVisit(Vertex u) throws Exception {
+        // Mark the actual vertex
+        get(u).seen = true;
+        get(u).active = true;
+
+        // Check if the adjacent vertices are seen
         for(Edge e: g.adj(u).outEdges) {
-            if(!get(e.to).seen){// if it is not seen call DFSVisit for that adjacent vertex
-                if(u.name == 100){
-                    System.out.println("I'm going to " + e.to.name);
-                }
+            if(! get(e.to).seen){
+                // DFSVisit for the adjacent vertex if it was not seen
                 dfsVisit(e.to);
-            }else if(get(e.to).active){// if the adjacent vertex is already active then throw exception
-                try {
-                    throw new Exception("Not a DAG");
-                } catch (Exception e1) {
-                    System.out.println(e1.getMessage());
-                }
+            }else if(get(e.to).active){
+                /* If the adjacent vertex is active then the graph is not a DAG
+                and in this case, an exception is thrown and will be caught on
+                pert method to return false (Not a DAG) */
+                throw new Exception();
             }
         }
-        //push u on stack
-        stackVertex.push(u);
-        get(u).active=false; //set u as not active
+
+        get(u).active = false;
+        tempVertexStack.push(u);
     }
 
-    // The following methods are called after calling pert().
-
-    // Earliest time at which task u can be completed
+    /**
+     * Determines the earliest time at which task u can be completed
+     *
+     * @param u vertex
+     * @return int : the earliest completion time
+     */
     public int ec(Vertex u) {
         int EC = 0;
+        // If it's the entry index, ec = duration
         if(u.inDegree() == 0)
             EC = get(u).duration;
         else {
-            int maxEC = 0;
-            for (Graph.Edge v : g.adj(u).inEdges) {
-                if (maxEC <= get(v.from).EC) {
-                    maxEC = get(v.from).EC;
-                    EC = maxEC + get(u).duration;
+            // Searching the maximum ec of adjacent incoming edge vertices
+            int maxEc = 0;
+            for (Edge v : g.adj(u).inEdges) {
+                if (get(v.from).ec >= maxEc) {
+                    maxEc = get(v.from).ec;
+                    EC = maxEc + get(u).duration;
                 }
             }
         }
+
         return EC;
     }
 
-    // Latest completion time of u
+    /**
+     * Determines the Latest completion time at which task u can be completed
+     *
+     * @param u vertex
+     * @return int : the latest completion time
+     */
     public int lc(Vertex u) {
         int LC = 0;
-            //set LC for the finish node = critical path length
-            if(u.outDegree() == 0){
-                LC = criticalPathLength;//set LC for the finish node = critical path length
-            }
-            else if (u.inDegree() == 0){
-                LC = get(u).duration;
-            }
-            else{
-                int minLC = Integer.MAX_VALUE;
-                for (Graph.Edge e: g.adj(u).outEdges) {
-                    Graph.Vertex v = e.to;
-                    if(minLC > (get(v).LC-get(v).duration)){
-                        minLC = get(v).LC-get(v).duration;
-                        LC = minLC;
-                    }
+        // If it's the finish vertex, lc = maximumEc
+        if(u.outDegree() == 0){
+            LC = criticalPath();
+        }
+//        // If it's the entry vertex, lc = duration
+//        else if (u.inDegree() == 0){
+//            LC = get(u).duration;
+//        }
+        else{
+            // Searching the minimum lc of adjacent outgoing edge vertices
+            int minLc = Integer.MAX_VALUE;
+            for (Edge e: g.adj(u).outEdges) {
+                Vertex v = e.to;
+                if((get(v).lc - get(v).duration) < minLc){
+                    minLc = get(v).lc - get(v).duration;
+                    LC = minLc;
                 }
             }
+        }
+
         return LC;
     }
 
-    // Slack of u
+    /**
+     * Determines the slack of a given vertex u
+     *
+     * @param u vertex
+     * @return int : slack of the vertex
+     */
     public int slack(Vertex u) {
-        return  get(u).LC - get(u).EC;
+        return  get(u).lc - get(u).ec;
     }
 
-    // Length of a critical path (time taken to complete project)
+    /**
+     * Determines the length of a critical path (time taken to complete project)
+     *
+     * @return int : length of a critical path
+     */
     public int criticalPath() {
-        return 0;
+        int maximumEc = 0;
+        for(Vertex u : finishList){
+            if(get(u).ec > maximumEc){
+                maximumEc = get(u).ec;
+            }
+        }
+        return maximumEc;
     }
 
-    // Is u a critical vertex?
+    /**
+     * Checks whether a given vertex is critical
+     *
+     * @param u vertex
+     * @return boolean : true if the vertex is critical, else false
+     */
     public boolean critical(Vertex u) {
         return get(u).slack == 0;
     }
 
-    // Number of critical vertices of g
+    /**
+     * Determines the number of critical vertices of g
+     *
+     * @return int : number of critical vertices
+     */
     public int numCritical() {
         int count = 0;
-        for (Graph.Vertex u : g) {
-            if(get(u).slack == 0){ // calculate the total number of critical tasks
+        for (Vertex u : g) {
+            if(get(u).slack == 0){
                 count++;
             }
         }
         return count;
     }
 
-    /* Create a PERT instance on g, runs the algorithm.
-     * Returns PERT instance if successful. Returns null if G is not a DAG.
+    /**
+     * Create a PERT instance on g, runs the algorithm.
+     *
+     * @param g graph
+     * @param duration graph vertices duration
+     * @return PERT : an instance of PERT, null if G is not a DAG
      */
     public static PERT pert(Graph g, int[] duration) {
         PERT p = new PERT(g);
@@ -219,17 +288,15 @@ public class PERT extends GraphAlgorithm<PERT.PERTVertex> {
         }
     }
 
-    public void show(){
-        System.out.println("Number of critical vertices: " + numCritical() + " Total Duration: " + criticalPathLength);
-        System.out.print("Nodes With No IN : ");
-        for(Vertex u : g){
-            if(u.inDegree() == 0)
-                System.out.print(u.name + " ");
-        }
-        System.out.println();
+    /**
+     * If the graph is DAG, show the output results
+     */
+    private void showResult(){
+        System.out.println("Number of critical vertices: " + numCritical());
+        System.out.println(criticalPath());
         System.out.println("u\tDur\tEC\tLC\tSlack\tCritical");
-        for(Graph.Vertex u: g) {
-            System.out.println(u + "\t" + get(u).duration+ "\t" + get(u).EC + "\t" + get(u).LC + "\t" + get(u).slack + "\t" + critical(u));
+        for(Vertex u: g) {
+            System.out.println(u + "\t" + get(u).duration + "\t" + get(u).ec + "\t" + get(u).lc + "\t" + get(u).slack + "\t" + critical(u));
         }
     }
 
@@ -238,8 +305,7 @@ public class PERT extends GraphAlgorithm<PERT.PERTVertex> {
         Scanner in;
         // If there is a command line argument, use it as file from which
         // input is read, otherwise use input from string.
-//        in = args.length > 0 ? new Scanner(new File(args[0])) : new Scanner(graph);
-        in = new Scanner(new File("test.txt"));
+        in = args.length > 0 ? new Scanner(new File(args[0])) : new Scanner(graph);
         Graph g = Graph.readDirectedGraph(in);
         g.printGraph(false);
 
@@ -248,14 +314,10 @@ public class PERT extends GraphAlgorithm<PERT.PERTVertex> {
             duration[i] = in.nextInt();
         }
         PERT p = pert(g, duration);
-//        if(p == null) {
-//            System.out.println("Invalid graph: not a DAG");
-//        } else {
-//            System.out.println("Number of critical vertices: " + p.numCritical());
-//            System.out.println("u\tDur\tEC\tLC\tSlack\tCriticaal");
-//            for(Graph.Vertex u: g) {
-//                System.out.println(u + "\t" + duration[u.getIndex()] + "\t" + get(u).EC+ "\t" + p.lc(u) + "\t" + p.slack(u) + "\t" + p.critical(u));
-//            }
-//        }
+        if(p == null) {
+            System.out.println("Invalid graph: not a DAG");
+        } else {
+            p.showResult();
+        }
     }
 }
